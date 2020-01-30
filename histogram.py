@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 
 
-def hist_cv(img):
+def hist_cv(img, mask=None):
     """
     Get a histogram of the input image for each of its channels.
 
@@ -10,7 +10,7 @@ def hist_cv(img):
     """
     res = []
     for i in range(img.shape[-1]):
-        res.append(cv2.calcHist([img], [i], None, [256], [0, 256]))
+        res.append(cv2.calcHist([img], [i], mask, [256], [0, 256]))
     return np.concatenate(res, axis=-1)
 
 
