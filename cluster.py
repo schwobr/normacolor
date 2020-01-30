@@ -89,6 +89,7 @@ def get_transform(weights_path, kmeans_path, hist_path, width=16, depth=3, patch
         if div:
             x = (x * 255)
         x = x.astype(np.uint8)
+
         stacked_x = []
         stacked_mask = []
         for i in range(n_clusters):
@@ -97,6 +98,7 @@ def get_transform(weights_path, kmeans_path, hist_path, width=16, depth=3, patch
             bin_mask = bin_mask[..., None]
             stacked_x.append(bin_mask * x)
             stacked_mask.append(bin_mask)
+
         stacked_x = np.stack(stacked_x).reshape(*x.shape[:2], -1)
         stacked_mask = np.stack(stacked_mask)
         src_hist = src_hist.reshape(256, -1)
