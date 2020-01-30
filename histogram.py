@@ -20,10 +20,10 @@ def get_lut(h_src, h_ref):
 
     ********************************************************************
     """
-    h_src = h_src.cumsum(axis=0)
-    h_src /= h_src.max()
-    h_ref = h_ref.cumsum(axis=0)
-    h_ref /= h_ref.max()
+    h_src = h_src.cumsum(0)
+    h_src /= h_src.max(0)
+    h_ref = h_ref.cumsum(0)
+    h_ref /= h_ref.max(0)
 
     lut = np.argmax((h_ref[:, None] >= h_src[None]), axis=0)
     return lut
