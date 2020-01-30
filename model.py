@@ -65,7 +65,7 @@ class Autoencoder:
         return Y
 
 
-def make_autoencoder_model(width=16, depth=3, patch_size=15):
+def make_autoencoder_model(width=16, depth=3, patch_size=16):
     """
     Create and compile autoencoder keras model.
 
