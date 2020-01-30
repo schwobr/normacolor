@@ -62,6 +62,11 @@ def load_batches(patches, batch_size=16):
         yield x        
 
 def get_mask(x, extractor, kmeans, batch_size=16):
+    """
+    Get mask and x as a byte array.
+
+    *******************************
+    """
     patches = patchify(x)
     fts = extractor.predict_generator(load_batches(patches, batch_size=batch_size))
     clusters = kmeans.predict(fts)
@@ -71,6 +76,11 @@ def get_mask(x, extractor, kmeans, batch_size=16):
     return x, mask
 
 def get_src_hist(x, mask, n_clusters):
+    """
+    Get histogram of x according to cluster mask. 
+
+    *********************************************
+    """
     src_hist = np.zeros((n_clusters, 256, 3))
     stacked_x = []
     stacked_mask = []
