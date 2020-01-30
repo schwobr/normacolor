@@ -60,7 +60,31 @@ def load_batches(patches, batch_size=16):
     if batch != []:
         x = np.stack(batch)
         yield x        
-    
+
+def get_mask(x, extractor, kmeans, batch_size=16):
+    patches = patchify(x)
+    fts = extractor.predict_generator(load_batches(patches, batch_size=batch_size))
+    clusters = kmeans.predict(fts)
+    mask = clusters.reshape((img_size, img_size))
+    x = (x * 255)
+    x = x.astype(np.uint8)
+    return x, mask
+
+def get_src_hist(x, mask, n_clusters):
+    src_hist = np.zeros((n_clusters, 256, 3))
+    stacked_x = []
+    stacked_mask = []
+    for i in range(n_clusters):
+        bin_mask = (mask == i)
+        src_hist[i] += hist_cv(x, mask=bin_mask)
+        bin_mask = bin_mask[..., None]
+        stacked_x.append(bin_mask * x)
+        stacked_mask.append(bin_mask)
+
+    stacked_x = np.stack(stacked_x).reshape(*x.shape[:2], -1)
+    stacked_mask = np.stack(stacked_mask)
+    src_hist = src_hist.reshape(256, -1)
+    return src_hist, stacked_x, stacked_mask
 
 def get_transform(weights_path, kmeans_path, hist_path, width=16, depth=3, patch_size=16, batch_size=16):
     """
@@ -74,38 +98,22 @@ def get_transform(weights_path, kmeans_path, hist_path, width=16, depth=3, patch
     kmeans = load(kmeans_path)
     n_clusters = kmeans.cluster_centers_.shape[0]
     ref_hist = np.load(hist_path)
-    src_hist = np.zeros((n_clusters, 256, 3))
 
     def _transform(x):
-        """
-        TODO: refactor
-        """
-        patches = patchify(x)
-        fts = extractor.predict_generator(load_batches(patches, batch_size=batch_size))
-        clusters = kmeans.predict(fts)
-        mask = clusters.reshape((img_size, img_size))
         dtype = x.dtype
-        div = dtype in [np.float16, np.float32, np.float64]
+        div = dtype not in [np.float16, np.float32, np.float64]
+        x = x.astype(np.float32)
         if div:
-            x = (x * 255)
-        x = x.astype(np.uint8)
+            x /= 255
 
-        stacked_x = []
-        stacked_mask = []
-        for i in range(n_clusters):
-            bin_mask = (mask == i)
-            src_hist[i] += hist_cv(x, mask=bin_mask)
-            bin_mask = bin_mask[..., None]
-            stacked_x.append(bin_mask * x)
-            stacked_mask.append(bin_mask)
+        x, mask = get_mask(x, extractor, kmeans, batch_size=batch_size)
+        src_hist, stacked_x, stacked_mask = get_src_hist(x, mask, n_clusters)
 
-        stacked_x = np.stack(stacked_x).reshape(*x.shape[:2], -1)
-        stacked_mask = np.stack(stacked_mask)
-        src_hist = src_hist.reshape(256, -1)
         lut = get_lut(src_hist, ref_hist)
         stacked_x = cv2.LUT(stacked_x, lut[:, None]).reshape(n_clusters, *x.shape[:2], 3)
         stacked_x = (stacked_mask * stacked_x).astype(dtype)
-        if div:
+        if not div:
             stacked_x /= 255
         return stacked_x.sum(0)
+
     return _transform
