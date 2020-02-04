@@ -103,7 +103,8 @@ class DataGenerator(object):
         self.patch_size = patch_size
         self.fileidx = 0
         self.batchidx = 0
-        self.load_image()
+        if len(self.files) > 0:
+            self.load_image()
 
     def __next__(self):
         """
