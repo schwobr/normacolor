@@ -27,6 +27,7 @@ def get_centroids(itemlist, extractor, save_path, n_clusters=8, batch_size=16, p
     dump(kmeans, save_path)
     return kmeans
 
+
 def get_histograms(itemlist, extractor, kmeans, save_path, batch_size=16, patch_size=16, img_size=256):
     """
     Compute a cumulated histogram for each cluster and each channel.
@@ -48,6 +49,7 @@ def get_histograms(itemlist, extractor, kmeans, save_path, batch_size=16, patch_
     np.save(save_path, hist)
     return hist
 
+
 def load_batches(patches, batch_size=16):
     batch = []
     for patch in patches:
@@ -59,7 +61,8 @@ def load_batches(patches, batch_size=16):
             batch = []
     if batch != []:
         x = np.stack(batch)
-        yield x        
+        yield x
+
 
 def get_mask(x, extractor, kmeans, batch_size=16):
     """
@@ -68,12 +71,14 @@ def get_mask(x, extractor, kmeans, batch_size=16):
     *******************************
     """
     patches = patchify(x)
-    fts = extractor.predict_generator(load_batches(patches, batch_size=batch_size))
+    fts = extractor.predict_generator(
+        load_batches(patches, batch_size=batch_size))
     clusters = kmeans.predict(fts)
-    mask = clusters.reshape((img_size, img_size))
+    mask = clusters.reshape(x.shape[:2])
     x = (x * 255)
     x = x.astype(np.uint8)
     return x, mask
+
 
 def get_src_hist(x, mask, n_clusters):
     """
@@ -96,6 +101,7 @@ def get_src_hist(x, mask, n_clusters):
     src_hist = src_hist.reshape(256, -1)
     return src_hist, stacked_x, stacked_mask
 
+
 def get_transform(weights_path, kmeans_path, hist_path, width=16, depth=3, patch_size=16, batch_size=16):
     """
     Get transform function that normalizers an image according to the reference histograms and clusters.
@@ -104,7 +110,8 @@ def get_transform(weights_path, kmeans_path, hist_path, width=16, depth=3, patch
     """
     model = make_autoencoder_model(width, depth, patch_size)
     model.load_weights(weights_path)
-    extractor = Model(inputs=model.inpu, outputs=model.get_layer('encoding').output)
+    extractor = Model(inputs=model.input,
+                      outputs=model.get_layer('encoding').output)
     kmeans = load(kmeans_path)
     n_clusters = kmeans.cluster_centers_.shape[0]
     ref_hist = np.load(hist_path)
@@ -120,7 +127,8 @@ def get_transform(weights_path, kmeans_path, hist_path, width=16, depth=3, patch
         src_hist, stacked_x, stacked_mask = get_src_hist(x, mask, n_clusters)
 
         lut = get_lut(src_hist, ref_hist)
-        stacked_x = cv2.LUT(stacked_x, lut[:, None]).reshape(n_clusters, *x.shape[:2], 3)
+        stacked_x = cv2.LUT(stacked_x, lut[:, None]).reshape(
+            n_clusters, *x.shape[:2], 3)
         stacked_x = (stacked_mask * stacked_x).astype(dtype)
         if not div:
             stacked_x /= 255

@@ -7,6 +7,7 @@ Load, preprocess and yield data to models.
 from skimage.util import view_as_windows
 import numpy as np
 from skimage.io import imread
+from math import ceil
 
 
 def getNextFilePath(output_folder, base_name):
@@ -132,6 +133,7 @@ class DataGenerator(object):
         self.image = patchify(
             imread(self.files[self.fileidx]),
             self.patch_size).astype(np.float32) / 255
+        self.size = self.image.shape[0]
         np.random.shuffle(self.image)
 
     def __iter__(self):
@@ -148,7 +150,7 @@ class DataGenerator(object):
 
         *******
         """
-        return len(self.files) // self.batch_size
+        return ceil(len(self.files)*self.size*self.ratio / self.batch_size)
 
 
 def get_generators(itemlist,

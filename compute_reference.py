@@ -1,15 +1,10 @@
-"""
-Script to fit autoencoder.
-
-**************************
-"""
 # coding: utf8
-import argparse
-from pathlib import Path
-from data import get_items, get_generators, getNextFilePath
 from model import make_autoencoder_model
-import pickle
-import os
+from data import get_items
+from cluster import get_centroids, get_histograms
+from argparse import ArgumentParser
+from pathlib import Path
+from keras.models import Model
 
 parser = argparse.ArgumentParser()
 
@@ -29,30 +24,34 @@ parser.add_argument("--ratio", type=float, default=1e-3,
                     help="percentage of patches to keep per image.")
 parser.add_argument("--patch-size", type=int, default=16,
                     help="size of the patches to extract.")
+parser.add_argument("--img-size", type=int, default=256,
+                    help="sizes of the original images.")
 parser.add_argument("--width", type=int, default=16,
                     help="number of filters in first layer.")
 parser.add_argument("--depth", type=int, default=3,
                     help="number of encoding layers.")
-
+parser.add_argument("--weights-path", required=True,
+                    help="path to weight file for autoencoder.")
+parser.add_argument("--kmeans-path", required=True,
+                    help="path to file to save reference kmeans.")
+parser.add_argument("--hist-path", required=True,
+                    help="path to file to save reference histogram.")
+parser.add_argument("--n-clusters", default=20, type=int,
+                    help="number of clusters for kmeans.")
 args = parser.parse_args()
 
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = args.device
-    itemlist = get_items(Path(args.dataset), extensions=['.png'])
-    train_gen, val_gen = get_generators(
-        itemlist, args.batch_size, args.ratio, args.patch_size)
+    itemlist = get_items(Path(args.dataset),
+                         extensions=['.png'],
+                         include=[f'CF_Normacolor_0{i}' for i in (234, 300, 303, 230, 182)])
     autoencoder = make_autoencoder_model(
         width=args.width, depth=args.depth, patch_size=args.patch_size)
-    history = autoencoder.fit_generator(train_gen,
-                                        epochs=args.epochs,
-                                        validation_data=val_gen,
-                                        steps_per_epoch=len(train_gen),
-                                        validation_steps=len(val_gen))
-    exp_id = getNextFilePath(Path(args.outdir), "history")
-    autoencoder.save_weights(os.path.join(
-        args.outdir, "weights_{}.h5".format(exp_id)))
-    file_path = os.path.join(args.outdir, "history_{}.p".format(exp_id))
-    with open(file_path, "wb") as f:
-        pickle.dump(history.history, f)
+    model.load_weights(args.weights_path)
+    extractor = Model(inputs=autoencoder.input,
+                      outputs=autoencoder.get_layer('encoding').output)
+    kmeans = get_centroids(itemlist, extractor, args.kmeans_path, n_clusters=args.n_clusters,
+                           batch_size=args.batch_size, patch_size=args.patch_size)
+    hist = get_histograms(itemlist, extractor, kmeans, args.hist_path,
+                          batch_size=args.batch_size, patch_size=args.patch_size, img_size=args.img_size)
