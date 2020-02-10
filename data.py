@@ -41,9 +41,10 @@ def patchify(image, size):
 
     ********************************
     """
-    pad = size // 2
+    pad_rd = size // 2
+    pad_lu = (size - 1) // 2
     arr = view_as_windows(np.pad(image,
-                                 ((pad, pad), (pad, pad), (0, 0)),
+                                 ((pad_lu, pad_rd), (pad_lu, pad_rd), (0, 0)),
                                  mode='reflect'),
                           (size, size, 3))
     return np.reshape(arr, (-1, size, size, 3))

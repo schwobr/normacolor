@@ -20,8 +20,10 @@ def get_centroids(itemlist, extractor, save_path, n_clusters=8, batch_size=16, p
 
     ******************************************************************
     """
-    gen, _ = get_generators(itemlist, batch_size, 1., patch_size, 1.)
+    print('Computing centroids...')
+    gen, _ = get_generators(itemlist, batch_size, 0.1, patch_size, 1.)
     fts = extractor.predict_generator(gen, steps=len(gen))
+    fts = fts.reshape((fts.shape[0], -1))
     kmeans = MiniBatchKMeans(n_clusters=n_clusters)
     kmeans.fit(fts)
     dump(kmeans, save_path)
@@ -34,17 +36,20 @@ def get_histograms(itemlist, extractor, kmeans, save_path, batch_size=16, patch_
 
     ****************************************************************
     """
+    print('Computing histograms...')
     n_clusters = kmeans.cluster_centers_.shape[0]
     hist = np.zeros((n_clusters, 256, 3))
-    for item in item_list:
+    for item in itemlist:
         gen, _ = get_generators([item], batch_size, 1., patch_size, 1.)
         fts = extractor.predict_generator(gen, steps=len(gen))
+        fts = fts.reshape((fts.shape[0], -1))
         clusters = kmeans.predict(fts)
         mask = clusters.reshape((img_size, img_size))
-        img = cv2.imread(item)
+        img = cv2.imread(str(item))
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         for i in range(n_clusters):
-            hist[i] += hist_cv(img, mask=(mask == i))
+            bin_mask = mask == i
+            hist[i] += hist_cv(img, mask=bin_mask)
     hist = hist.reshape(256, -1)
     np.save(save_path, hist)
     return hist
@@ -90,7 +95,7 @@ def get_src_hist(x, mask, n_clusters):
     stacked_x = []
     stacked_mask = []
     for i in range(n_clusters):
-        bin_mask = (mask == i)
+        bin_mask = mask == i
         src_hist[i] += hist_cv(x, mask=bin_mask)
         bin_mask = bin_mask[..., None]
         stacked_x.append(bin_mask * x)

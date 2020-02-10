@@ -9,6 +9,7 @@ def hist_cv(img, mask=None):
     ************************************************************
     """
     res = []
+    mask = mask.astype(np.uint8)
     for i in range(img.shape[-1]):
         res.append(cv2.calcHist([img], [i], mask, [256], [0, 256]))
     return np.concatenate(res, axis=-1)

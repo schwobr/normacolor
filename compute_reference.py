@@ -6,6 +6,7 @@ import argparse
 from pathlib import Path
 from keras.models import Model
 import os
+from joblib import load
 
 parser = argparse.ArgumentParser()
 
@@ -34,9 +35,11 @@ args = parser.parse_args()
 if __name__ == '__main__':
     os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
     os.environ["CUDA_VISIBLE_DEVICES"] = args.device
+    print('Loading items...')
     itemlist = get_items(Path(args.dataset),
                          extensions=['.png'],
                          include=[f'CF_Normacolor_0{i}' for i in (234, 300, 303, 230, 182)])
+    print('Loading model...')
     autoencoder = make_autoencoder_model(
         width=args.width, depth=args.depth, patch_size=args.patch_size)
     autoencoder.load_weights(args.weights_path)
@@ -44,8 +47,9 @@ if __name__ == '__main__':
                       outputs=autoencoder.get_layer('encoding').output)
 
     outdir = Path(args.outdir)
-    exp_id = getNextFilePath(outdir, "kmeans")
-    kmeans = get_centroids(itemlist, extractor, outdir/f'kmeans_{exp_id}.p', n_clusters=args.n_clusters,
-                           batch_size=args.batch_size, patch_size=args.patch_size)
+    exp_id = getNextFilePath(outdir, "kmeans_1.p")
+    #kmeans = get_centroids(itemlist, extractor, outdir/f'kmeans_{exp_id}.p', n_clusters=args.n_clusters,
+    #                       batch_size=args.batch_size, patch_size=args.patch_size)
+    kmeans = load('/data/DeepLearning/SCHWOB_Robin/normalize/kmeans_1.p')
     hist = get_histograms(itemlist, extractor, kmeans, outdir/f'hist_{exp_id}.npy',
                           batch_size=args.batch_size, patch_size=args.patch_size, img_size=args.img_size)
