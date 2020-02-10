@@ -12,6 +12,7 @@ import numpy as np
 from keras import Model
 import cv2
 from joblib import dump, load
+from math import ceil
 
 
 def get_centroids(itemlist, extractor, save_path, n_clusters=8, batch_size=16, patch_size=16):
@@ -57,27 +58,31 @@ def get_histograms(itemlist, extractor, kmeans, save_path, batch_size=16, patch_
 
 def load_batches(patches, batch_size=16):
     batch = []
+    k = 0
     for patch in patches:
         if len(batch) < batch_size:
             batch.append(patch)
         else:
             x = np.stack(batch)
+            k += 1
             yield x
-            batch = []
+            batch = [patch]
     if batch != []:
         x = np.stack(batch)
         yield x
 
 
-def get_mask(x, extractor, kmeans, batch_size=16):
+def get_mask(x, extractor, kmeans, patch_size=16, batch_size=16):
     """
     Get mask and x as a byte array.
 
     *******************************
     """
-    patches = patchify(x)
+    patches = patchify(x, patch_size)
     fts = extractor.predict_generator(
-        load_batches(patches, batch_size=batch_size))
+        load_batches(patches, batch_size=batch_size),
+        steps=ceil(patches.shape[0]/batch_size))
+    fts = fts.reshape((fts.shape[0], -1))
     clusters = kmeans.predict(fts)
     mask = clusters.reshape(x.shape[:2])
     x = (x * 255)
@@ -128,7 +133,7 @@ def get_transform(weights_path, kmeans_path, hist_path, width=16, depth=3, patch
         if div:
             x /= 255
 
-        x, mask = get_mask(x, extractor, kmeans, batch_size=batch_size)
+        x, mask = get_mask(x, extractor, kmeans, patch_size=patch_size, batch_size=batch_size)
         src_hist, stacked_x, stacked_mask = get_src_hist(x, mask, n_clusters)
 
         lut = get_lut(src_hist, ref_hist)
