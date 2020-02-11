@@ -15,7 +15,8 @@ from joblib import dump, load
 from math import ceil
 
 
-def get_centroids(itemlist, extractor, save_path, n_clusters=8, batch_size=16, patch_size=16):
+def get_centroids(itemlist, extractor, save_path,
+                  n_clusters=8, batch_size=16, patch_size=16):
     """
     Performs KMeans on input image features computed from input model.
 
@@ -31,7 +32,8 @@ def get_centroids(itemlist, extractor, save_path, n_clusters=8, batch_size=16, p
     return kmeans
 
 
-def get_histograms(itemlist, extractor, kmeans, save_path, batch_size=16, patch_size=16, img_size=256):
+def get_histograms(itemlist, extractor, kmeans, save_path,
+                   batch_size=16, patch_size=16, img_size=256):
     """
     Compute a cumulated histogram for each cluster and each channel.
 
@@ -92,7 +94,7 @@ def get_mask(x, extractor, kmeans, patch_size=16, batch_size=16):
 
 def get_src_hist(x, mask, n_clusters):
     """
-    Get histogram of x according to cluster mask. 
+    Get histogram of x according to cluster mask.
 
     *********************************************
     """
@@ -112,11 +114,13 @@ def get_src_hist(x, mask, n_clusters):
     return src_hist, stacked_x, stacked_mask
 
 
-def get_transform(weights_path, kmeans_path, hist_path, width=16, depth=3, patch_size=16, batch_size=16):
+def get_transform(weights_path, kmeans_path, hist_path,
+                  width=16, depth=3, patch_size=16, batch_size=16):
     """
-    Get transform function that normalizers an image according to the reference histograms and clusters.
+    Get transform function that normalizers an image according to the reference
+    histograms and clusters.
 
-    ****************************************************************************************************
+    ***************************************************************************
     """
     model = make_autoencoder_model(width, depth, patch_size)
     model.load_weights(weights_path)
@@ -133,7 +137,8 @@ def get_transform(weights_path, kmeans_path, hist_path, width=16, depth=3, patch
         if div:
             x /= 255
 
-        x, mask = get_mask(x, extractor, kmeans, patch_size=patch_size, batch_size=batch_size)
+        x, mask = get_mask(x, extractor, kmeans,
+                           patch_size=patch_size, batch_size=batch_size)
         src_hist, stacked_x, stacked_mask = get_src_hist(x, mask, n_clusters)
 
         lut = get_lut(src_hist, ref_hist)
