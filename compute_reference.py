@@ -38,18 +38,21 @@ if __name__ == '__main__':
     print('Loading items...')
     itemlist = get_items(Path(args.dataset),
                          extensions=['.png'],
-                         include=[f'CF_Normacolor_0{i}' for i in (234, 300, 303, 230, 182)])
-    print('Loading model...')
+                         include=[f'CF_Normacolor_0{i}'
+                                  for i in (234, 300, 303, 230, 182)])
     autoencoder = make_autoencoder_model(
-        width=args.width, depth=args.depth, patch_size=args.patch_size)
+        width=args.width, depth=args.depth, patch_size=argys.patch_size)
     autoencoder.load_weights(args.weights_path)
     extractor = Model(inputs=autoencoder.input,
                       outputs=autoencoder.get_layer('encoding').output)
 
     outdir = Path(args.outdir)
-    exp_id = getNextFilePath(outdir, "kmeans_1.p")
-    #kmeans = get_centroids(itemlist, extractor, outdir/f'kmeans_{exp_id}.p', n_clusters=args.n_clusters,
-    #                       batch_size=args.batch_size, patch_size=args.patch_size)
-    kmeans = load('/data/DeepLearning/SCHWOB_Robin/normalize/kmeans_1.p')
-    hist = get_histograms(itemlist, extractor, kmeans, outdir/f'hist_{exp_id}.npy',
-                          batch_size=args.batch_size, patch_size=args.patch_size, img_size=args.img_size)
+    exp_id = getNextFilePath(outdir, "kmeans")
+    kmeans = get_centroids(
+        itemlist, extractor, outdir / f'kmeans_{exp_id}.p',
+        n_clusters=args.n_clusters, batch_size=args.batch_size,
+        patch_size=args.patch_size)
+    hist = get_histograms(
+        itemlist, extractor, kmeans, outdir / f'hist_{exp_id}.npy',
+        batch_size=args.batch_size, patch_size=args.patch_size,
+        img_size=args.img_size)
