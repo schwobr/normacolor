@@ -41,7 +41,7 @@ if __name__ == '__main__':
                          include=[f'CF_Normacolor_0{i}'
                                   for i in (234, 300, 303, 230, 182)])
     autoencoder = make_autoencoder_model(
-        width=args.width, depth=args.depth, patch_size=argys.patch_size)
+        width=args.width, depth=args.depth, patch_size=args.patch_size)
     autoencoder.load_weights(args.weights_path)
     extractor = Model(inputs=autoencoder.input,
                       outputs=autoencoder.get_layer('encoding').output)
