@@ -13,6 +13,7 @@ from keras import Model
 import cv2
 from joblib import dump, load
 from math import ceil
+import time
 
 
 def get_centroids(itemlist, extractor, save_path,
@@ -61,17 +62,8 @@ def get_histograms(itemlist, extractor, kmeans, save_path,
 def load_batches(patches, batch_size=16):
     batch = []
     k = 0
-    for patch in patches:
-        if len(batch) < batch_size:
-            batch.append(patch)
-        else:
-            x = np.stack(batch)
-            k += 1
-            yield x
-            batch = [patch]
-    if batch != []:
-        x = np.stack(batch)
-        yield x
+    for k in range(ceil(len(patches)/batch_size)):
+        yield patches[k*batch_size: (k+1)*batch_size]
 
 
 def get_mask(x, extractor, kmeans, patch_size=16, batch_size=16):
@@ -81,11 +73,15 @@ def get_mask(x, extractor, kmeans, patch_size=16, batch_size=16):
     *******************************
     """
     patches = patchify(x, patch_size)
+    t = time.time()
     fts = extractor.predict_generator(
         load_batches(patches, batch_size=batch_size),
         steps=ceil(patches.shape[0]/batch_size))
+    print(time.time()-t)
     fts = fts.reshape((fts.shape[0], -1))
+    t = time.time()
     clusters = kmeans.predict(fts)
+    print(time.time()-t)
     mask = clusters.reshape(x.shape[:2])
     x = (x * 255)
     x = x.astype(np.uint8)
@@ -143,7 +139,7 @@ def get_transform(weights_path, kmeans_path, hist_path,
 
         lut = get_lut(src_hist, ref_hist)
         stacked_x = cv2.LUT(stacked_x, lut[:, None]).reshape(
-            n_clusters, *x.shape[:2], 3)
+            n_clusters, *x.shape[:2], 3).clip(0, 255)
         stacked_x = (stacked_mask * stacked_x).astype(dtype)
         if not div:
             stacked_x /= 255
