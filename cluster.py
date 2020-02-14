@@ -127,7 +127,8 @@ def get_transform(weights_path, kmeans_path, hist_path,
     extractor = Model(inputs=model.input,
                       outputs=model.get_layer('encoding').output)
     kmeans = load(kmeans_path)
-    n_clusters = kmeans.cluster_centers_.shape[0]
+    centers = kmeans.cluster_centers_
+    n_clusters = centers.shape[0]
     ref_hist = np.load(hist_path)
 
     def _transform(x):
@@ -136,7 +137,6 @@ def get_transform(weights_path, kmeans_path, hist_path,
         x = x.astype(np.float32)
         if div:
             x /= 255
-
         x, mask = get_mask(x, extractor, kmeans,
                            patch_size=patch_size, batch_size=batch_size)
         src_hist, stacked_x, stacked_mask = get_src_hist(x, mask, n_clusters)
@@ -148,5 +148,52 @@ def get_transform(weights_path, kmeans_path, hist_path,
         if not div:
             stacked_x /= 255
         return stacked_x.sum(0)
+
+    return _transform
+
+
+def get_transform1(weights_path, kmeans_path, hist_path,
+                   width=16, depth=3, patch_size=16, batch_size=16):
+    """
+    Get transform function that normalizers an image according to the reference
+    histograms and clusters.
+
+    ***************************************************************************
+    """
+    model = make_autoencoder_model(width, depth, patch_size)
+    model.load_weights(weights_path)
+    extractor = Model(inputs=model.input,
+                      outputs=model.get_layer('encoding').output)
+    kmeans = load(kmeans_path)
+    centers = kmeans.cluster_centers_
+    closest = ((centers[None]-centers[:, None]) **
+               2).sum(-1).argsort(axis=-1)[:, 1]
+    n_clusters = centers.shape[0]
+    hist_ref = np.load(hist_path)
+    hist_ref = hist_ref.reshape((n_clusters, 256, -1))
+
+    def _transform(x):
+        dtype = x.dtype
+        div = dtype not in [np.float16, np.float32, np.float64]
+        x = x.astype(np.float32)
+        if div:
+            x /= 255
+        tfmed = np.zeros_like(x)
+        x, mask = get_mask(x, extractor, kmeans,
+                           patch_size=patch_size, batch_size=batch_size)
+        for k in range(n_clusters):
+            bin_mask = mask == k
+            if bin_mask.sum() < 0.01 * np.prod(mask.shape):
+                mask[bin_mask] = closest[k]
+        for k in range(n_clusters):
+            bin_mask = mask == k
+            hist_src = hist_cv(x, mask=bin_mask)
+            lut = get_lut(hist_src, hist_ref[k]).astype(np.uint8)
+            for c in range(3):
+                tfmed[..., c] += cv2.LUT(x[..., c]*bin_mask, lut[:, c])
+        tfmed = tfmed.reshape((*mask.shape, 3)).clip(0, 255).astype(dtype)
+        if not div:
+            tfmed /= 255
+        return tfmed
 
     return _transform

@@ -9,7 +9,8 @@ def hist_cv(img, mask=None):
     ************************************************************
     """
     res = []
-    mask = mask.astype(np.uint8)
+    if mask is not None:
+        mask = mask.astype(np.uint8)
     for i in range(img.shape[-1]):
         res.append(cv2.calcHist([img], [i], mask, [256], [0, 256]))
     return np.concatenate(res, axis=-1)
@@ -22,11 +23,11 @@ def get_lut(h_src, h_ref):
     ********************************************************************
     """
     h_src = h_src.cumsum(0)
-    h_src /= h_src.max(0)
+    h_src /= (h_src.max(0) + 1e-7)
     h_ref = h_ref.cumsum(0)
-    h_ref /= h_ref.max(0)
+    h_ref /= (h_ref.max(0) + 1e-7)
 
-    lut = np.argmax((h_ref[:, None] >= h_src[None]), axis=0)
+    lut = np.argmax((h_ref[:, None]+1e-7 >= h_src[None]), axis=0)
     return lut
 
 
