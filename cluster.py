@@ -6,7 +6,7 @@ Cluster pixels of an image and create corresponding masks.
 # coding: utf8
 from sklearn.cluster import MiniBatchKMeans
 from data import get_generators, patchify
-from histogram import hist_cv, get_lut
+from histogram import hist_cv, get_lut, match_hists
 from model import make_autoencoder_model
 import numpy as np
 from keras import Model
@@ -34,7 +34,7 @@ def get_centroids(itemlist, extractor, save_path,
 
 
 def get_histograms(itemlist, extractor, kmeans, save_path,
-                   batch_size=16, patch_size=16, img_size=256):
+                   batch_size=16, patch_size=16, img_size=256, n_bins=360):
     """
     Compute a cumulated histogram for each cluster and each channel.
 
@@ -42,7 +42,7 @@ def get_histograms(itemlist, extractor, kmeans, save_path,
     """
     print('Computing histograms...')
     n_clusters = kmeans.cluster_centers_.shape[0]
-    hist = np.zeros((n_clusters, 256, 3))
+    hist = np.zeros((n_clusters, n_bins, 3))
     for item in itemlist:
         gen, _ = get_generators([item], batch_size, 1., patch_size, 1.)
         fts = extractor.predict_generator(gen, steps=len(gen))
@@ -50,11 +50,13 @@ def get_histograms(itemlist, extractor, kmeans, save_path,
         clusters = kmeans.predict(fts)
         mask = clusters.reshape((img_size, img_size))
         img = cv2.imread(str(item))
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = cv2.cvtColor(img.astype(np.float32)/255, cv2.COLOR_BGR2HSV)
+        img[..., 1:] *= 100
+        img = img.astype(np.uint16)
         for i in range(n_clusters):
             bin_mask = mask == i
-            hist[i] += hist_cv(img, mask=bin_mask)
-    hist = hist.reshape(256, -1)
+            hist[i] += hist_cv(img, mask=bin_mask, n_bins=n_bins)
+    hist = hist.reshape(n_bins, -1)
     np.save(save_path, hist)
     return hist
 
@@ -149,7 +151,8 @@ def get_transform(weights_path, kmeans_path, hist_path,
 
 
 def get_transform1(weights_path, kmeans_path, hist_path,
-                   width=16, depth=3, patch_size=16, batch_size=16):
+                   width=16, depth=3, patch_size=16,
+                   batch_size=16, n_bins=256, chans=[0, 1, 2]):
     """
     Get transform function that normalizers an image according to the reference
     histograms and clusters.
@@ -163,10 +166,10 @@ def get_transform1(weights_path, kmeans_path, hist_path,
     kmeans = load(kmeans_path)
     centers = kmeans.cluster_centers_
     closest = ((centers[None]-centers[:, None]) **
-               2).sum(-1).argsort(axis=-1)[:, 1]
+               2).sum(-1).argsort(axis=-1)[:, 1:]
     n_clusters = centers.shape[0]
     hist_ref = np.load(hist_path)
-    hist_ref = hist_ref.reshape((n_clusters, 256, -1))
+    hist_ref = hist_ref.reshape((n_clusters, n_bins, -1))
 
     def _transform(x):
         dtype = x.dtype
@@ -174,22 +177,33 @@ def get_transform1(weights_path, kmeans_path, hist_path,
         x = x.astype(np.float32)
         if div:
             x /= 255
-        tfmed = np.zeros_like(x)
         x, mask = get_mask(x, extractor, kmeans,
                            patch_size=patch_size, batch_size=batch_size)
+        x = cv2.cvtColor(x.astype(np.float32)/255, cv2.COLOR_RGB2HSV)
+        x[..., 1:] *= 100
+        tfmed = np.copy(x)
+        tfmed[..., chans] = 0
+        x = x.astype(np.uint16)
         for k in range(n_clusters):
             bin_mask = mask == k
             if bin_mask.sum() < 0.01 * np.prod(mask.shape):
-                mask[bin_mask] = closest[k]
+                for j in range(n_clusters - 1):
+                    if (mask == j).sum() >= 0.01 * np.prod(mask.shape):
+                        mask[bin_mask] = closest[k, j]
+                        break
         for k in range(n_clusters):
             bin_mask = mask == k
-            hist_src = hist_cv(x, mask=bin_mask)
-            lut = get_lut(hist_src, hist_ref[k]).astype(np.uint8)
-            for c in range(3):
-                tfmed[..., c] += cv2.LUT(x[..., c]*bin_mask, lut[:, c])
-        tfmed = tfmed.reshape((*mask.shape, 3)).clip(0, 255).astype(dtype)
-        if not div:
-            tfmed /= 255
+            hist_src = hist_cv(x, mask=bin_mask, n_bins=n_bins, chans=chans)
+            lut = get_lut(hist_src, hist_ref[k])
+            tfmed += match_hists(x*bin_mask[..., None], lut,
+                                 n_bins=n_bins, chans=chans)*bin_mask[..., None]
+        print(tfmed.max((0, 1)))
+        tfmed = tfmed.reshape((*mask.shape, 3))
+        tfmed[..., 1:] /= 100
+        tfmed = cv2.cvtColor(tfmed, cv2.COLOR_HSV2RGB)
+        if div:
+            tfmed *= 255
+        tfmed = tfmed.astype(dtype)
         return tfmed
 
     return _transform

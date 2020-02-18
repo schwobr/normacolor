@@ -39,7 +39,7 @@ if __name__ == '__main__':
     itemlist = get_items(Path(args.dataset),
                          extensions=['.png'],
                          include=[f'CF_Normacolor_0{i}'
-                                  for i in (234, 300, 303, 230, 182)])
+                                  for i in (234,)])
     autoencoder = make_autoencoder_model(
         width=args.width, depth=args.depth, patch_size=args.patch_size)
     autoencoder.load_weights(args.weights_path)
