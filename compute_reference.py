@@ -30,6 +30,8 @@ parser.add_argument("--weights-path", required=True,
                     help="path to weight file for autoencoder.")
 parser.add_argument("--n-clusters", default=20, type=int,
                     help="number of clusters for kmeans.")
+parser.add_argument('--format', default='RGB', choices=['RGB', 'HSV', 'HSL'],
+                    help='format of the image channels.')
 args = parser.parse_args()
 
 if __name__ == '__main__':
@@ -55,4 +57,4 @@ if __name__ == '__main__':
     hist = get_histograms(
         itemlist, extractor, kmeans, outdir / f'hist_{exp_id}.npy',
         batch_size=args.batch_size, patch_size=args.patch_size,
-        img_size=args.img_size)
+        img_size=args.img_size, format=args.format)
