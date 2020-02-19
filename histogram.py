@@ -42,9 +42,8 @@ def hist_matching(src, ref):
     return cv2.LUT(src, lut[:, None])
 
 
-def match_hists(src, lut, n_bins=256, chans=[0, 1, 2]):
+def match_hists(src, lut, chans=[0, 1, 2]):
     res = np.zeros_like(src)
-    for k in range(n_bins):
-        for c in chans:
-            res[..., c] = np.where((src == k)[..., c], lut[k, c], res[..., c])
+    for c in chans:
+        res[..., c] = lut[:, c][src[..., c]]
     return res

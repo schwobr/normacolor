@@ -236,10 +236,8 @@ def get_transform1(weights_path, kmeans_path, hist_path,
             hist_src = hist_cv(x, mask=bin_mask,
                                n_bins=conf['n_bins'], chans=chans)
             lut = get_lut(hist_src, hist_ref[k])
-            tfmed += match_hists(x*bin_mask[..., None],
-                                 lut,
-                                 n_bins=n_bins,
-                                 chans=chans) * bin_mask[..., None]
+            tfmed += (match_hists(x * bin_mask[..., None], lut, chans=chans) *
+                      bin_mask[..., None])
 
         tfmed = tfmed.reshape((*mask.shape, 3)).astype(conf['dtype'])
         tfmed *= max_vals / (conf['n_bins'] - 1)
