@@ -25,14 +25,6 @@ _format_configs = {
         'rgb_cvt': cv2.COLOR_RGB2HSV,
         'inv_cvt': cv2.COLOR_HSV2RGB
     },
-    'HSL': {
-        'max_values': [359., 1., 1.],
-        'n_bins': 360,
-        'dtype': np.float32,
-        'bgr_cvt': cv2.COLOR_BGR2HSL,
-        'rgb_cvt': cv2.COLOR_RGB2HSL,
-        'inv_cvt': cv2.COLOR_HSL2RGB
-    },
     'RGB': {
         'max_values': [255, 255, 255],
         'n_bins': 256,
@@ -78,13 +70,25 @@ def get_histograms(itemlist, extractor, kmeans, save_path,
         fts = fts.reshape((fts.shape[0], -1))
         clusters = kmeans.predict(fts)
         mask = clusters.reshape((img_size, img_size))
+
         img = cv2.imread(str(item)).astype(conf['dtype'])
         if img.dtype == np.float32:
             img /= 255
         img = cv2.cvtColor(img, conf['bgr_cvt'])
+        max_vals = np.array(conf['max_values'])[None, None]
+        img *= (conf['n_bins'] - 1) / max_vals
+        if format == 'HSV':
+            img[..., 0] -= 250
+            img[..., 0] %= 360
+        img = img.astype(np.uint16)
+        if format == 'HSV':
+            img[..., 0] %= 360
+
         for i in range(n_clusters):
             bin_mask = mask == i
-            hist[i] += hist_cv(img, mask=bin_mask, n_bins=conf['n_bins'])
+            hist[i] += hist_cv(img, mask=bin_mask,
+                               n_bins=conf['n_bins'],
+                               max_vals=conf['max_values'])
     hist = hist.reshape(conf['n_bins'], -1)
     np.save(save_path, hist)
     return hist
@@ -216,38 +220,46 @@ def get_transform1(weights_path, kmeans_path, hist_path,
             x /= 255
         if conf['rgb_cvt'] is not None:
             x = cv2.cvtColor(x, conf['rgb_cvt'])
-
         max_vals = np.array(conf['max_values'])[None, None]
-        x *= (conf['nbins'] - 1) / max_vals
+        if format == 'HSV':
+            x[..., 0] -= 250
+            x[..., 0] %= 360
+        x *= (conf['n_bins'] - 1) / max_vals
         x = x.astype(np.uint16)
+        if format == 'HSV':
+            x[..., 0] %= 360
         tfmed = np.copy(x)
         tfmed[..., chans] = 0
 
-        for k in range(n_clusters):
-            bin_mask = mask == k
-            if bin_mask.sum() < 0.01 * np.prod(mask.shape):
-                for j in range(n_clusters - 1):
-                    if (mask == j).sum() >= 0.01 * np.prod(mask.shape):
-                        mask[bin_mask] = closest[k, j]
-                        break
-
+        # for k in range(n_clusters):
+        #     bin_mask = mask == k
+        #     if bin_mask.sum() < 0.01 * np.prod(mask.shape):
+        #         for j in range(n_clusters - 1):
+        #             if (mask == j).sum() >= 0.01 * np.prod(mask.shape):
+        #                 mask[bin_mask] = closest[k, j]
+        #                 break
         for k in range(n_clusters):
             bin_mask = mask == k
             hist_src = hist_cv(x, mask=bin_mask,
-                               n_bins=conf['n_bins'], chans=chans)
-            lut = get_lut(hist_src, hist_ref[k])
-            tfmed += (match_hists(x * bin_mask[..., None], lut, chans=chans) *
+                               n_bins=conf['n_bins'],
+                               chans=chans,
+                               max_vals=conf['max_values'])
+            lut = get_lut(hist_src, hist_ref[k][:, chans])
+            tfmed += (match_hists(x * bin_mask[..., None], lut) *
                       bin_mask[..., None])
-
-        tfmed = tfmed.reshape((*mask.shape, 3)).astype(conf['dtype'])
+        if format == 'HSV':
+            tfmed[..., 0] += 250
+            tfmed[..., 0] %= 360
+        tfmed = tfmed.astype(conf['dtype'])
         tfmed *= max_vals / (conf['n_bins'] - 1)
         if conf['inv_cvt'] is not None:
             tfmed = cv2.cvtColor(tfmed, conf['inv_cvt'])
         if not div and format == 'RGB':
             tfmed /= 255
-        elif div and format != 'RGB':
+        elif div and format == 'HSV':
             tfmed *= 255
         tfmed = tfmed.astype(dtype)
+        print(cv2.cvtColor(tfmed.astype(np.float32)/255, conf['rgb_cvt'])[10, 173, 0])
         return tfmed
 
     return _transform
